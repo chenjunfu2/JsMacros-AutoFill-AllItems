@@ -125,9 +125,7 @@ function getItemId(pos, faceOffset) {
         let extraNbt = "";
         const nbt = frameItem.getNBT();
         if (nbt) {
-            if (nbt.has("tag")) {
-                extraNbt = `,tag:${nbt.get("tag").toString().replace(/^NBTElementHelper:/, "").slice(1, -1)}`;
-            }
+            extraNbt = `,tag:${nbt.toString().replace(/^NBTElementHelper:/, "").slice(1, -1)}`;
         }
         return { itemId, extraNbt };
     }
