@@ -1,0 +1,2 @@
+# JsMacros-AutoFill-AllItems
+全物品创造模式根据方块与展示框自动填充漏斗的基于JsMacros Mod的脚本
