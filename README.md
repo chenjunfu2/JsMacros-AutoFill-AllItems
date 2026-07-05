@@ -1,5 +1,5 @@
 # JsMacros-AutoFill-AllItems
-全物品创造模式根据方块与展示框自动填充漏斗的基于JsMacros Mod的脚本。  
+全物品创造模式根据排版中的方块与展示框自动填充漏斗的基于JsMacros Mod的脚本。  
 默认配置为六花的[Toka V2](https://www.bilibili.com/video/BV1UC411j7W5/)全物品。
 
 # 使用方法
