@@ -126,7 +126,7 @@ function getItemId(pos, faceOffset) {
         const nbt = frameItem.getNBT();
         if (nbt) {
             if (nbt.has("components")) {
-                extraNbt = `,components:${nbt.get("components").toString()}`;
+                extraNbt = `,components:${nbt.get("components").toString().replace(/^NBTElementHelper:/, "").slice(1, -1)}`;
             }
         }
         return { itemId, extraNbt };
