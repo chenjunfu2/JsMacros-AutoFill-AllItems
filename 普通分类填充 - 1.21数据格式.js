@@ -100,9 +100,9 @@ function scanFace(cfg) {
         const block = World.getBlock(current);
         if (!block) break;
 
-        const itemId = getItemId(current, cfg.faceOffset);
+        const itemData = getItemId(current, cfg.faceOffset);
         const funnelPos = current.offset(cfg.funnelOffset[0], cfg.funnelOffset[1], cfg.funnelOffset[2]);
-        const cmds = buildFunnelCommands(funnelPos, itemId);
+        const cmds = buildFunnelCommands(funnelPos, itemData);
         cmds.forEach(c => commandsToExecute.push(c));
 
         //先判定，再移动，以包含结束位置
@@ -134,7 +134,15 @@ function getItemId(pos, faceOffset) {
     const checkPos = pos.offset(faceOffset);
     const frameItem = itemFrameMap.get(pos2str(checkPos));
     if (frameItem) {
-        return frameItem.getItemId();
+        const itemId = frameItem.getItemId();
+        let extraNbt = "";
+        const nbt = frameItem.getNBT();
+        if (nbt) {
+            if (nbt.has("components")) {
+                extraNbt = `,components:${nbt.get("components").toString()}`;
+            }
+        }
+        return { itemId, extraNbt };
     }
 
     const block = World.getBlock(pos);
@@ -143,29 +151,31 @@ function getItemId(pos, faceOffset) {
     // 非基底、非空气 → 直接映射为物品
     if (blockId !== BASE_BLOCK && blockId !== "minecraft:air") {
         const item = Block2Item.get(blockId.replace("wall_", ""));
-        if (item) return item;
+        if (item) return { itemId: item, extraNbt: "" };
     }
 
     // 附着方块检查
     const attachedBlock = World.getBlock(checkPos);
     if (attachedBlock.getId() !== "minecraft:air") {
         const item = Block2Item.get(attachedBlock.getId().replace("wall_", ""));
-        if (item) return item;
+        if (item) return { itemId: item, extraNbt: "" };
     }
 
     return null; // 无物品
 }
 
 // 生成漏斗修改命令组
-function buildFunnelCommands(funnelPos, itemId) {
+function buildFunnelCommands(funnelPos, itemData) {
     const x = funnelPos.getX(), y = funnelPos.getY(), z = funnelPos.getZ();
     const cmds = [];
 
     // 空气 → 设为乐色A
-    if (!itemId || itemId === "minecraft:air") {
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"minecraft:gold_nugget",count:1b,components:{"minecraft:custom_name":"填充物A"}}`);
+    if (!itemData || itemData.itemId === "minecraft:air") {
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"minecraft:gold_nugget",count:1,components:{"minecraft:custom_name":"填充物A"}}`);
         return cmds;
     }
+
+    const { itemId, extraNbt } = itemData;
 
     const itemStack = ItemList.find(i => i.getId() === itemId)?.getDefaultStack();
     if (!itemStack) {
@@ -183,18 +193,18 @@ function buildFunnelCommands(funnelPos, itemId) {
 
     if (maxCount === 16) {
         // 16 堆叠 → slot0 放 1 个，slot3、slot4 各 -1
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",count:1b}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"minecraft:iron_nugget",count:4b,components:{"minecraft:custom_name":"填充物B"}}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"minecraft:iron_nugget",count:4b,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",count:1${extraNbt}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"minecraft:iron_nugget",count:4,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"minecraft:iron_nugget",count:4,components:{"minecraft:custom_name":"填充物B"}}`);
     } else {
         // 64 堆叠 → slot0 放 2 个
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",count:2b}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",count:2${extraNbt}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
     }
     return cmds;
 }

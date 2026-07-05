@@ -80,16 +80,16 @@ function scanFace(cfg) {
         const block = World.getBlock(current);
         if (!block) break;
 
-        const itemId = getItemId(current, cfg.faceOffset);
+        const itemData = getItemId(current, cfg.faceOffset);
 
         // 打包机漏斗
         const packerPos = current.offset(cfg.packerOffset[0], cfg.packerOffset[1], cfg.packerOffset[2]);
-        const packerCmds = buildPackerCommands(packerPos, itemId);
+        const packerCmds = buildPackerCommands(packerPos, itemData);
         packerCmds.forEach(c => commandsToExecute.push(c));
 
         // 潜影盒分类漏斗
         const shulkerPos = current.offset(cfg.shulkerOffset[0], cfg.shulkerOffset[1], cfg.shulkerOffset[2]);
-        const shulkerCmds = buildShulkerCommands(shulkerPos, itemId);
+        const shulkerCmds = buildShulkerCommands(shulkerPos, itemData);
         shulkerCmds.forEach(c => commandsToExecute.push(c));
 
         //先判定，再移动，以包含结束位置
@@ -116,41 +116,53 @@ function direction(from, to) {
     };
 }
 
-// 获取物品ID（不变）
+// 获取物品ID（不展开潜影盒，无物品返回 null）
 function getItemId(pos, faceOffset) {
     const checkPos = pos.offset(faceOffset);
     const frameItem = itemFrameMap.get(pos2str(checkPos));
     if (frameItem) {
-        return frameItem.getItemId();
+        const itemId = frameItem.getItemId();
+        let extraNbt = "";
+        const nbt = frameItem.getNBT();
+        if (nbt) {
+            if (nbt.has("components")) {
+                extraNbt = `,components:${nbt.get("components").toString()}`;
+            }
+        }
+        return { itemId, extraNbt };
     }
 
     const block = World.getBlock(pos);
     const blockId = block.getId();
 
+    // 非基底、非空气 → 直接映射为物品
     if (blockId !== BASE_BLOCK && blockId !== "minecraft:air") {
         const item = Block2Item.get(blockId.replace("wall_", ""));
-        if (item) return item;
+        if (item) return { itemId: item, extraNbt: "" };
     }
 
+    // 附着方块检查
     const attachedBlock = World.getBlock(checkPos);
     if (attachedBlock.getId() !== "minecraft:air") {
         const item = Block2Item.get(attachedBlock.getId().replace("wall_", ""));
-        if (item) return item;
+        if (item) return { itemId: item, extraNbt: "" };
     }
 
-    return null;
+    return null; // 无物品
 }
 
 // 打包机漏斗命令生成
-function buildPackerCommands(funnelPos, itemId) {
+function buildPackerCommands(funnelPos, itemData) {
     const x = funnelPos.getX(), y = funnelPos.getY(), z = funnelPos.getZ();
     const cmds = [];
 
     // 空气 → 乐色A
-    if (!itemId || itemId === "minecraft:air") {
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"minecraft:gold_nugget",count:1b,components:{"minecraft:custom_name":"填充物A"}}`);
+    if (!itemData || itemData.itemId === "minecraft:air") {
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"minecraft:gold_nugget",count:1,components:{"minecraft:custom_name":"填充物A"}}`);
         return cmds;
     }
+
+    const { itemId, extraNbt } = itemData;
 
     const itemStack = ItemList.find(i => i.getId() === itemId)?.getDefaultStack();
     if (!itemStack) {
@@ -166,25 +178,27 @@ function buildPackerCommands(funnelPos, itemId) {
     }
 
     // 正常64堆叠：slot0 放2个，其余恢复5个乐色B
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",Count:2b}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"minecraft:iron_nugget",count:5b,components:{"minecraft:custom_name":"填充物B"}}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",Count:2b${extraNbt}}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"minecraft:iron_nugget",count:5,components:{"minecraft:custom_name":"填充物B"}}`);
     return cmds;
 }
 
 // 潜影盒分类漏斗命令生成
-function buildShulkerCommands(funnelPos, itemId) {
+function buildShulkerCommands(funnelPos, itemData) {
     const x = funnelPos.getX(), y = funnelPos.getY(), z = funnelPos.getZ();
     const cmds = [];
     const shulkerId = SHULKER_BOX_ID.replace("minecraft:", "");
 
     // 空气 → 乐色A（也可以设为潜影盒占位，这里保持统一用乐色A）
-    if (!itemId || itemId === "minecraft:air") {
-        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"minecraft:gold_nugget",count:1b,tag:{RepairCost:0,display:{Name:'{"text":"填充物A"}'}}}`);
+    if (!itemData || itemData.itemId === "minecraft:air") {
+        cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"minecraft:gold_nugget",count:1,components:{"minecraft:custom_name":"填充物A"}}`);
         return cmds;
     }
+
+    const { itemId, extraNbt } = itemData;
 
     const itemStack = ItemList.find(i => i.getId() === itemId)?.getDefaultStack();
     if (!itemStack) {
@@ -200,10 +214,10 @@ function buildShulkerCommands(funnelPos, itemId) {
     }
 
     // 正常64堆叠：slot0 放1个物品，其余槽位各放1个潜影盒
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",count:1b}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"${shulkerId}",count:1b}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"${shulkerId}",count:1b}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"${shulkerId}",count:1b}`);
-    cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"${shulkerId}",count:1b}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[0] set value {Slot:0b,id:"${idShort}",count:1${extraNbt}}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[1] set value {Slot:1b,id:"${shulkerId}",count:1}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[2] set value {Slot:2b,id:"${shulkerId}",count:1}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[3] set value {Slot:3b,id:"${shulkerId}",count:1}`);
+    cmds.push(`/data modify block ${x} ${y} ${z} Items[4] set value {Slot:4b,id:"${shulkerId}",count:1}`);
     return cmds;
 }
